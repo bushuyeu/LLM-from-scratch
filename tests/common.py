@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from __future__ import annotations
 
 import pathlib
@@ -7,7 +6,7 @@ from functools import lru_cache
 FIXTURES_PATH = (pathlib.Path(__file__).resolve().parent) / "fixtures"
 
 
-@lru_cache()
+@lru_cache
 def gpt2_bytes_to_unicode() -> dict[int, str]:
     """
     Returns a mapping between every possible byte (an integer from 0 to 255) to a
@@ -37,11 +36,7 @@ def gpt2_bytes_to_unicode() -> dict[int, str]:
     """
     # These 188 integers can used as-is, since they are not whitespace or control characters.
     # See https://www.ssec.wisc.edu/~tomw/java/unicode.html.
-    bs = (
-        list(range(ord("!"), ord("~") + 1))
-        + list(range(ord("¡"), ord("¬") + 1))
-        + list(range(ord("®"), ord("ÿ") + 1))
-    )
+    bs = list(range(ord("!"), ord("~") + 1)) + list(range(ord("¡"), ord("¬") + 1)) + list(range(ord("®"), ord("ÿ") + 1))
     cs = bs[:]
     # now get the representations of the other 68 integers that do need shifting
     # each will get mapped chr(256 + n), where n will grow from 0...67 in the loop

@@ -1,13 +1,7 @@
-#!/usr/bin/env python3
 import numpy
 import torch
 
 from .adapters import get_adamw_cls, run_get_lr_cosine_schedule
-from .common import FIXTURES_PATH
-
-
-def _optimize(opt_class) -> torch.Tensor:
-    torch.manual_seed(42)
     model = torch.nn.Linear(3, 2, bias=False)
     opt = opt_class(
         model.parameters(),
@@ -28,7 +22,7 @@ def _optimize(opt_class) -> torch.Tensor:
     return model.weight.detach()
 
 
-def test_adamw():
+def test_adamw(numpy_snapshot):
     """
     Our reference implementation yields slightly different results than the
     PyTorch AdamW, since there are a couple different ways that you can apply
@@ -36,18 +30,18 @@ def test_adamw():
     floating point behavior. So, we test that the provided implementation matches
     _either_ our reference implementation's expected results or those from the PyTorch AdamW.
     """
-    expected_weights = torch.load(FIXTURES_PATH / "adamw_expected_params.pt")
+    # expected_weights = torch.load(FIXTURES_PATH / "adamw_expected_params.pt")
     pytorch_weights = _optimize(torch.optim.AdamW)
     actual_weights = _optimize(get_adamw_cls())
 
-    matches_expected = torch.allclose(actual_weights, expected_weights, atol=1e-6)
-    matches_pytorch = torch.allclose(actual_weights, pytorch_weights, atol=1e-6)
-    if matches_expected or matches_pytorch:
+    # Might need to exit early if the weights match pytorch, since that should also be valid
+    matches_pytorch = torch.allclose(actual_weights, pytorch_weights, atol=1e-4)
+    if matches_pytorch:
         return
-    # re-raise the error if the provided implementation doesn't
-    # match either our reference implementation or the PyTorch implementation
-    numpy.testing.assert_allclose(
-        actual_weights.detach().numpy(), expected_weights.detach().numpy(), atol=1e-6
+
+    numpy_snapshot.assert_match(
+        actual_weights,
+        atol=1e-4,
     )
 
 

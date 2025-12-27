@@ -2,11 +2,76 @@
 
 All changes we make to the assignment code or PDF will be documented in this file.
 
-## [unreleased] - yyyy-mm-dd
+## [1.0.6] 2025-08-28
+- handout: Fix bug in RoPE formulation
+- code: Fix typing for adapters
+- code: Relock dependencies
+- code: Minor reformatting
 
+
+## [1.0.5] 2025-04-15
+- code: Add submission script, fix typos
+- code: Use `uv_build` for the package build system
+- handout: Fix RoPE indexing
+- code: Fix test for truncated LM inputs
+- code: Ruff reformatting and linting
+- code: Simplify snapshot testing
+- code: Make everything compatible with `ty` typing
+
+## [1.0.4] - 2025-04-08
 ### Added
+- handout: add guidance on parallelizing pretokenization and provide starter code for chunking
+- handout: add guidance on removing special tokens before pretokenization (you should split on them!)
 
 ### Changed
+- handout: fix command for compiling model on MPS backend
+
+## [1.0.3] - 2025-04-07
+### Added
+- code: Test for removing special tokens when training BPE
+
+### Changed
+- handout: Fixed RoPE off-by-one error
+- code: Fix for Intel Macs, support 3.11 and PyTorch 2.2.2 when on MacOS x86_64
+
+## [1.0.2] - 2025-04-03
+### Added
+- code: Missing tests for Linear and Embedding
+
+### Changed
+- handout: Fix RMSNorm interface
+- handout: Add hints in RMSNorm and SwiGLU specifications to improve numerical stability
+- handout: Clarify the BPE stylized example uses naive pretokenization by splitting on whitespace; your implementations should still use the provided regex
+- handout: Fix docstring for RMSNorm
+
+## [1.0.1] - 2025-04-02
+### Changed
+- code: Add some tolerance to RoPE tests
+- code: Make sure loading happens on CPU for tests
+- code: Fix docstring typing for readability of Tensor annotations in VSCode (pls fix, @Microsoft)
+
+## [1.0.0] - 2025-04-01
+
+### Added
+- code: uv environments
+- code: Tensor type annotations
+- code: Snapshot testing, use --update-snapshots to update (soln only)
+- code/handout: SwiGLU
+- code/handout: RoPE
+- handout: einops
+- code/handout: new ablations
+- handout: low-resource tips
+- handout: Linear and Embedding from scratch
+
+### Changed
+- handout: complete reformatting, restructuring, rewording
+- handout: redefine attention
+- handout: GeLU -> SiLU
+- handout: parameter initialization
+- handout: remove dropout
+- handout: redraw figures
+- handout: new experiments
+- handout: BPE explanations, systems, explain weird behaviors in solutions
 
 ### Fixed
 
@@ -127,7 +192,7 @@ All changes we make to the assignment code or PDF will be documented in this fil
 - handout: fix the expected number of non-embedding parameters for model with
   recommended TinyStories hyperparameters (section 7.2).
 - handout: replace `<|endofsequence|>` with `<|endoftext|>` in the `decoding` problem.
-- code: fix the setup command (`pip install -e .'[test]'`)to improve zsh compatibility. 
+- code: fix the setup command (`pip install -e .'[test]'`)to improve zsh compatibility.
 - handout: fix various trivial typos and formatting errors.
 
 ## [0.1.0] - 2024-04-01
