@@ -1,264 +1,249 @@
-# ece496b_basics/__init__.py (production-grade optimized)
+# ece496b_basics/__init__.py
 
 from typing import List, Dict, Tuple, Iterable  # Typing helpers for annotations
-import os                                       # PathLike typing support
-import regex as re                              # Regex module with Unicode property support
-from collections import defaultdict             # Lets increment counts without checking for missing keys
-import heapq                                    # Priority queue for O(log n) best pair finding
-from multiprocessing import Pool, cpu_count    # Parallel processing for pre-tokenization
+import os  # PathLike typing support
+import regex as re  # Regex module with Unicode property support
+from collections import defaultdict  # lets increment counts without checking for missing keys
+import multiprocessing  # For parallel pre-tokenization
 
 # GPT-2 pre-tokenization pattern - splits text into word-like chunks
 GPT2_SPLIT_PATTERN = r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
-# Compile pattern once at module level (avoid recompiling)
-_COMPILED_PATTERN = re.compile(GPT2_SPLIT_PATTERN)
+def _iter_pretokens(text: str, special_tokens: List[str], pat: re.Pattern) -> Iterable[bytes]:  # Yield pre-tokens from text
+    if special_tokens:  # Split on special tokens first
+        delimiter = "|".join(re.escape(tok) for tok in special_tokens)  # Build escaped split pattern
+        segments = re.split(delimiter, text)  # Split text around special tokens
+    else:  # No special tokens provided
+        segments = [text]  # Use full text as one segment
+
+    for segment in segments:  # Process each segment separately
+        if not segment:  # Skip empty segments
+            continue  # Nothing to tokenize
+        for match in pat.finditer(segment):  # Find regex matches
+            token = match.group(0)  # Extract matched substring
+            if token:  # Ensure token is non-empty
+                yield token.encode("utf-8")  # Return UTF-8 bytes
+
+# Apply a BPE merge to a token sequence, return new sequence and whether it changed
+def merge_key(ids: Tuple[int, ...], pair: Tuple[int, int], idx: int) -> Tuple[Tuple[int, ...], bool]:
+    new_ids: List[int] = []                      # Output list of token ids after merge
+    i: int = 0                                   # Position pointer over input
+    changed: bool = False                        # Track if any merge happened
+    while i < len(ids):                          # Continue until end of sequence
+        if i < len(ids) - 1 and ids[i] == pair[0] and ids[i + 1] == pair[1]:  # Check if next two tokens match pair
+            new_ids.append(idx)                  # Replace pair with new merged token
+            i += 2                               # Skip both merged tokens
+            changed = True                       # Mark that we made a change
+        else:                                    # No match at this position
+            new_ids.append(ids[i])               # Keep current token as-is
+            i += 1                               # Advance by one
+    return tuple(new_ids), changed               # Return new sequence and change flag
 
 
-def _process_chunk(args: Tuple[str, List[str]]) -> Dict[Tuple[int, ...], int]:
-    """Process a single text chunk - used for multiprocessing."""
-    chunk, special_tokens = args                # Unpack arguments
-    local_counts: Dict[Tuple[int, ...], int] = defaultdict(int)  # Local pre-token counts
-    
-    if special_tokens:                          # Split on special tokens first
-        delimiter = "|".join(re.escape(tok) for tok in special_tokens)  # Build escaped pattern
-        segments = re.split(delimiter, chunk)   # Split around special tokens
-    else:                                       # No special tokens
-        segments = [chunk]                      # Use full chunk
-    
-    for segment in segments:                    # Process each segment
-        if not segment:                         # Skip empty
-            continue
-        for match in _COMPILED_PATTERN.finditer(segment):  # Find matches
-            token = match.group(0)              # Get matched text
-            if token:                           # Non-empty
-                key = tuple(token.encode("utf-8"))  # Convert to byte tuple
-                local_counts[key] += 1          # Count it
-    
-    return dict(local_counts)                   # Return as regular dict for pickling
+def _pretokenize_chunk(args: Tuple) -> Dict[Tuple[int, ...], int]:
+    """Pre-tokenize a byte range of a file and return token counts."""
+    input_path, start, end, special_tokens = args
+    pat = re.compile(GPT2_SPLIT_PATTERN)
+    counts: Dict[Tuple[int, ...], int] = {}
+    with open(input_path, "rb") as f:
+        f.seek(start)
+        raw = f.read(end - start)
+    text = raw.decode("utf-8", errors="ignore")
+    for token_bytes in _iter_pretokens(text, special_tokens, pat):
+        key = tuple(token_bytes)
+        counts[key] = counts.get(key, 0) + 1
+    return counts
 
 
-def _parallel_pretokenize(text: str, special_tokens: List[str], num_workers: int = None) -> Dict[Tuple[int, ...], int]:
-    """Pre-tokenize text using multiple CPU cores."""
-    if num_workers is None:                     # Auto-detect workers
-        num_workers = max(1, cpu_count() - 1)   # Leave one core free
-    
-    # Split text into chunks at document boundaries (special tokens)
-    if special_tokens:                          # Have special tokens to split on
-        delimiter = special_tokens[0]           # Use first special token as delimiter
-        chunks = text.split(delimiter)          # Split into documents
-        # Re-add delimiter to chunks (except last) for proper processing
-        chunks = [c + delimiter if i < len(chunks) - 1 else c for i, c in enumerate(chunks)]
-    else:                                       # No special tokens
-        # Split into roughly equal chunks
-        chunk_size = len(text) // num_workers + 1  # Size per worker
-        chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
-    
-    # Filter empty chunks
-    chunks = [c for c in chunks if c.strip()]   # Remove empty/whitespace chunks
-    
-    if len(chunks) <= 1 or num_workers <= 1:    # Not worth parallelizing
-        return _process_chunk((text, special_tokens))  # Process directly
-    
-    # Process chunks in parallel
-    combined_counts: Dict[Tuple[int, ...], int] = defaultdict(int)
-    
-    with Pool(num_workers) as pool:             # Create process pool
-        args = [(chunk, special_tokens) for chunk in chunks]  # Prepare arguments
-        results = pool.map(_process_chunk, args)  # Map across workers
-        
-        for local_counts in results:            # Combine results
-            for token, count in local_counts.items():
-                combined_counts[token] += count # Aggregate counts
-    
-    return dict(combined_counts)                # Return combined counts
+def _find_chunk_boundaries(
+    file_path: str | os.PathLike,
+    desired_num_chunks: int,
+    split_special_token: bytes,
+) -> List[int]:
+    """Split file into chunks on special token boundaries."""
+    with open(file_path, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        file_size = f.tell()
+        f.seek(0)
+
+        chunk_size = file_size // desired_num_chunks
+        boundaries = [i * chunk_size for i in range(desired_num_chunks + 1)]
+        boundaries[-1] = file_size
+
+        mini_chunk_size = 4096
+        for bi in range(1, len(boundaries) - 1):
+            initial_position = boundaries[bi]
+            f.seek(initial_position)
+            while True:
+                mini_chunk = f.read(mini_chunk_size)
+                if mini_chunk == b"":
+                    boundaries[bi] = file_size
+                    break
+                found_at = mini_chunk.find(split_special_token)
+                if found_at != -1:
+                    boundaries[bi] = initial_position + found_at
+                    break
+                initial_position += mini_chunk_size
+
+    return sorted(set(boundaries))
 
 
-class MaxHeap:
-    """Max-heap for efficiently finding the best pair."""
-    
-    def __init__(self):                         # Initialize empty heap
-        self._heap: List[Tuple[int, bytes, bytes, Tuple[int, int]]] = []  # (neg_count, byte1, byte2, pair)
-        self._valid: Dict[Tuple[int, int], int] = {}  # Track current valid counts
-    
-    def push(self, pair: Tuple[int, int], count: int, vocab: Dict[int, bytes]):
-        """Add or update a pair in the heap."""
-        self._valid[pair] = count               # Mark current count as valid
-        if count > 0:                           # Only add if positive count
-            # Use negative count for max-heap behavior (heapq is min-heap)
-            # Include bytes for tie-breaking (larger bytes = higher priority)
-            heapq.heappush(self._heap, (-count, vocab[pair[0]], vocab[pair[1]], pair))
-    
-    def pop_best(self, vocab: Dict[int, bytes]) -> Tuple[Tuple[int, int], int]:
-        """Get the best (most frequent) pair."""
-        while self._heap:                       # While heap not empty
-            neg_count, b1, b2, pair = heapq.heappop(self._heap)  # Get top element
-            count = -neg_count                  # Convert back to positive
-            
-            # Check if this entry is still valid (count matches current)
-            if pair in self._valid and self._valid[pair] == count and count > 0:
-                return pair, count              # Valid best pair found
-            # Otherwise entry is stale, continue to next
-        
-        return None, 0                          # No valid pairs left
-    
-    def update(self, pair: Tuple[int, int], count: int, vocab: Dict[int, bytes]):
-        """Update count for a pair (lazy deletion - just add new entry)."""
-        self._valid[pair] = count               # Update valid count
-        if count > 0:                           # Only add if positive
-            heapq.heappush(self._heap, (-count, vocab[pair[0]], vocab[pair[1]], pair))
-    
-    def remove(self, pair: Tuple[int, int]):
-        """Mark a pair as removed."""
-        self._valid[pair] = 0                   # Mark as invalid
-
-
-def _iter_pretokens(text: str, special_tokens: List[str], pat: re.Pattern) -> Iterable[bytes]:
-    """Yield pre-tokens from text (kept for compatibility)."""
-    if special_tokens:                          # Split on special tokens first
-        delimiter = "|".join(re.escape(tok) for tok in special_tokens)
-        segments = re.split(delimiter, text)
-    else:
-        segments = [text]
-
-    for segment in segments:
-        if not segment:
-            continue
-        for match in pat.finditer(segment):
-            token = match.group(0)
-            if token:
-                yield token.encode("utf-8")
-
-
+# Train a byte-level BPE tokenizer from a text file
 def train_bpe(
-    input_path: str | os.PathLike,              # Path to training text file
-    vocab_size: int,                            # Maximum final vocabulary size
-    special_tokens: List[str],                  # Special tokens to append
-    use_multiprocessing: bool = True,           # Enable parallel pre-tokenization
-    num_workers: int = None,                    # Number of workers (None = auto)
-) -> Tuple[Dict[int, bytes], List[Tuple[bytes, bytes]]]:
+    input_path: str | os.PathLike,               # Path to training text file
+    vocab_size: int,                             # Maximum final vocabulary size (bytes + merges + specials)
+    special_tokens: List[str],                   # Special tokens to append to the vocabulary
+) -> Tuple[Dict[int, bytes], List[Tuple[bytes, bytes]]]:  # Return vocab and merges
 
-    assert vocab_size > 0                       # Validate vocab_size
+    assert vocab_size > 0, "vocab_size must be positive"  # Validate vocab_size is positive
 
-    num_special = len(special_tokens)           # Count special tokens
-    num_merges = vocab_size - 256 - num_special # Merges to learn
-    assert num_merges >= 0                      # Ensure room for merges
+    num_special: int = len(special_tokens)       # Count how many special tokens will be added
+    num_merges: int = vocab_size - 256 - num_special  # Number of merges allowed after reserving space
+    assert num_merges >= 0, f"vocab_size={vocab_size} is too small for 256 byte tokens + {num_special} special tokens"
 
-    # Read input file
-    with open(input_path, "r", encoding="utf-8") as f:
-        text = f.read()
+    # --- Phase 1: Pre-tokenize with multiprocessing ---
+    input_path = str(input_path)
+    file_size = os.path.getsize(input_path)
 
-    # Pre-tokenize (parallel or single-threaded)
-    if use_multiprocessing:                     # Use parallel processing
-        pre_token_counts = _parallel_pretokenize(text, special_tokens, num_workers)
-    else:                                       # Single-threaded fallback
-        pre_token_counts = defaultdict(int)
-        for token_bytes in _iter_pretokens(text, special_tokens, _COMPILED_PATTERN):
-            pre_token_counts[tuple(token_bytes)] += 1
-        pre_token_counts = dict(pre_token_counts)
+    # Use multiprocessing for files larger than 1MB
+    num_workers = max(1, os.cpu_count() or 1)
+    if file_size > 1_000_000 and num_workers > 1:
+        # Determine split token for chunk boundaries
+        split_token = special_tokens[0].encode("utf-8") if special_tokens else b"\n"
+        boundaries = _find_chunk_boundaries(input_path, num_workers, split_token)
 
-    # Initialize vocabulary with 256 byte tokens
+        chunk_args = [
+            (input_path, boundaries[i], boundaries[i + 1], special_tokens)
+            for i in range(len(boundaries) - 1)
+        ]
+
+        with multiprocessing.Pool(num_workers) as pool:
+            chunk_results = pool.map(_pretokenize_chunk, chunk_args)
+
+        # Merge all chunk counts
+        pre_token_counts: Dict[Tuple[int, ...], int] = {}
+        for chunk_counts in chunk_results:
+            for key, count in chunk_counts.items():
+                pre_token_counts[key] = pre_token_counts.get(key, 0) + count
+    else:
+        # Small file: single-threaded (avoids multiprocessing overhead)
+        with open(input_path, "r", encoding="utf-8") as f:
+            text = f.read()
+        pre_token_counts = {}
+        pat = re.compile(GPT2_SPLIT_PATTERN)
+        for token_bytes in _iter_pretokens(text, special_tokens, pat):
+            key = tuple(token_bytes)
+            pre_token_counts[key] = pre_token_counts.get(key, 0) + 1
+
+    # --- Phase 2: Build data structures for incremental BPE ---
     vocab: Dict[int, bytes] = {i: bytes([i]) for i in range(256)}
+
+    # Convert to indexed mutable pre-token lists with weights
+    pt_tokens: List[List[int]] = []       # mutable token sequences
+    pt_weights: List[int] = []            # frequency weights
+    for token_tuple, weight in pre_token_counts.items():
+        pt_tokens.append(list(token_tuple))
+        pt_weights.append(weight)
+    del pre_token_counts
+
+    # Build initial pair counts and reverse index
+    pair_counts: Dict[Tuple[int, int], int] = {}
+    pair_to_pts: Dict[Tuple[int, int], set] = defaultdict(set)
+
+    for idx in range(len(pt_tokens)):
+        tokens = pt_tokens[idx]
+        w = pt_weights[idx]
+        for j in range(len(tokens) - 1):
+            pair = (tokens[j], tokens[j + 1])
+            pair_counts[pair] = pair_counts.get(pair, 0) + w
+            pair_to_pts[pair].add(idx)
+
     merges_order: List[Tuple[int, int]] = []
 
-    # Build initial pair counts and index
-    pair_counts: Dict[Tuple[int, int], int] = defaultdict(int)
-    pair_to_pretokens: Dict[Tuple[int, int], set] = defaultdict(set)
-
-    for token, count in pre_token_counts.items():
-        for j in range(len(token) - 1):
-            pair = (token[j], token[j + 1])
-            pair_counts[pair] += count
-            pair_to_pretokens[pair].add(token)
-
-    # Initialize max-heap for O(log n) best pair finding
-    heap = MaxHeap()
-    for pair, count in pair_counts.items():
-        heap.push(pair, count, vocab)
-
-    # BPE training loop
+    # --- Phase 3: Incremental BPE merge loop ---
     for i in range(num_merges):
-        # Find best pair using heap (O(log n) amortized)
-        best, best_count = heap.pop_best(vocab)
-        
-        if best is None or best_count == 0:     # No valid pairs left
+        if not pair_counts:
             break
 
-        idx = 256 + i                           # New token id
+        # Find most frequent pair with tie-breaking by largest byte representation
+        best: Tuple[int, int] = None
+        best_count: int = -1
+        best_bytes: Tuple[bytes, bytes] = None
+        for p, count in pair_counts.items():
+            if count > best_count:
+                best = p
+                best_count = count
+                best_bytes = (vocab[p[0]], vocab[p[1]])
+            elif count == best_count:
+                p_bytes = (vocab[p[0]], vocab[p[1]])
+                if p_bytes > best_bytes:
+                    best = p
+                    best_bytes = p_bytes
 
-        # Get affected pre-tokens
-        affected_pretokens = pair_to_pretokens.get(best, set()).copy()
-        
-        if not affected_pretokens:              # No tokens to merge
-            continue
+        new_id: int = 256 + i
+        a, b = best
 
-        # Process only affected pre-tokens
-        tokens_to_remove = []                   # Track tokens to remove
-        tokens_to_add = {}                      # Track tokens to add
-
-        for token in affected_pretokens:
-            if token not in pre_token_counts:   # Token already processed
-                continue
-                
-            count = pre_token_counts[token]
-            tokens_to_remove.append(token)      # Mark for removal
-
-            # Decrement old pair counts
-            for j in range(len(token) - 1):
-                old_pair = (token[j], token[j + 1])
-                pair_counts[old_pair] -= count
-                heap.update(old_pair, pair_counts[old_pair], vocab)
-                pair_to_pretokens[old_pair].discard(token)
-                if pair_counts[old_pair] <= 0:
-                    pair_counts.pop(old_pair, None)
-                    heap.remove(old_pair)
-
-            # Apply merge
-            new_token = []
-            j = 0
-            while j < len(token):
-                if j < len(token) - 1 and token[j] == best[0] and token[j + 1] == best[1]:
-                    new_token.append(idx)
-                    j += 2
-                else:
-                    new_token.append(token[j])
-                    j += 1
-            new_token = tuple(new_token)
-
-            # Track new token
-            if new_token in tokens_to_add:
-                tokens_to_add[new_token] += count
-            else:
-                tokens_to_add[new_token] = count
-
-        # Update pre_token_counts
-        for token in tokens_to_remove:
-            del pre_token_counts[token]
-        
-        for new_token, count in tokens_to_add.items():
-            if new_token in pre_token_counts:   # Merge with existing
-                pre_token_counts[new_token] += count
-            else:
-                pre_token_counts[new_token] = count
-
-            # Increment new pair counts
-            for j in range(len(new_token) - 1):
-                new_pair = (new_token[j], new_token[j + 1])
-                old_count = pair_counts.get(new_pair, 0)
-                pair_counts[new_pair] = old_count + count
-                pair_to_pretokens[new_pair].add(new_token)
-                heap.update(new_pair, pair_counts[new_pair], vocab)
-
-        # Record merge
+        # Update vocab
+        vocab[new_id] = vocab[a] + vocab[b]
         merges_order.append(best)
-        vocab[idx] = vocab[best[0]] + vocab[best[1]]
 
-    # Add special tokens
-    next_id = 256 + len(merges_order)
+        # Get affected pre-tokens and remove the merged pair from tracking
+        affected = pair_to_pts.pop((a, b), set())
+        pair_counts.pop((a, b), None)
+
+        # Apply merge incrementally to each affected pre-token
+        for pt_idx in affected:
+            tokens = pt_tokens[pt_idx]
+            w = pt_weights[pt_idx]
+
+            j = 0
+            while j < len(tokens) - 1:
+                if tokens[j] == a and tokens[j + 1] == b:
+                    # Remove old left neighbor pair count
+                    if j > 0:
+                        old_left = (tokens[j - 1], a)
+                        pair_counts[old_left] = pair_counts.get(old_left, 0) - w
+                        if pair_counts[old_left] <= 0:
+                            pair_counts.pop(old_left, None)
+
+                    # Remove old right neighbor pair count
+                    if j + 2 < len(tokens):
+                        old_right = (b, tokens[j + 2])
+                        pair_counts[old_right] = pair_counts.get(old_right, 0) - w
+                        if pair_counts[old_right] <= 0:
+                            pair_counts.pop(old_right, None)
+
+                    # Apply merge in-place
+                    tokens[j] = new_id
+                    del tokens[j + 1]
+
+                    # Add new left neighbor pair
+                    if j > 0:
+                        new_left = (tokens[j - 1], new_id)
+                        pair_counts[new_left] = pair_counts.get(new_left, 0) + w
+                        pair_to_pts.setdefault(new_left, set()).add(pt_idx)
+
+                    # Add new right neighbor pair
+                    if j + 1 < len(tokens):
+                        new_right = (new_id, tokens[j + 1])
+                        pair_counts[new_right] = pair_counts.get(new_right, 0) + w
+                        pair_to_pts.setdefault(new_right, set()).add(pt_idx)
+
+                    # Don't increment j: after merge, tokens[j]=new_id.
+                    # Since new_id != a (new_id >= 256+i, a < 256+i for previously
+                    # existing tokens), the next check will fall to else and increment.
+                else:
+                    j += 1
+
+    # --- Phase 4: Add special tokens ---
+    next_id: int = 256 + len(merges_order)
     for sp in special_tokens:
         vocab[next_id] = sp.encode("utf-8")
         next_id += 1
 
-    # Convert merges to bytes format
-    merges_bytes = [(vocab[a], vocab[b]) for (a, b) in merges_order]
+    merges_bytes: List[Tuple[bytes, bytes]] = [
+        (vocab[a_id], vocab[b_id])
+        for (a_id, b_id) in merges_order
+    ]
 
     return vocab, merges_bytes
