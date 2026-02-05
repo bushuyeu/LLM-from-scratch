@@ -16,6 +16,12 @@ def main():                              # Main entry point function
     parser.add_argument("--vocab-size", type=int, default=10000, help="Target vocabulary size")  # Vocab size as integer, default 10k
     parser.add_argument("--output-dir", default="outputs", help="Output directory")  # Where to save results
     parser.add_argument("--profile", action="store_true", help="Run with profiling")  # Boolean flag for profiling (no value needed)
+    parser.add_argument(  # Optional override for multiprocessing workers
+        "--num-workers",
+        type=int,
+        default=None,
+        help="Number of worker processes for pre-tokenization (default: cpu_count()-1)",
+    )
     args = parser.parse_args()           # Parse command-line arguments into args object
 
     # Create output directory
@@ -41,7 +47,8 @@ def main():                              # Main entry point function
     vocab, merges = train_bpe(           # Call our BPE training function
         args.input,                      # Path to training corpus
         vocab_size=args.vocab_size,      # Target vocabulary size
-        special_tokens=["<|endoftext|>"] # TinyStories document delimiter token
+        special_tokens=["<|endoftext|>"], # TinyStories document delimiter token
+        num_workers=args.num_workers,    # Optional override for multiprocessing workers
     )
 
     elapsed = time.time() - start        # Calculate elapsed time in seconds
