@@ -357,7 +357,10 @@ class TransformerLM(nn.Module):
 
         # Shared RoPE across all layers — precomputed cos/sin tables
         d_k = d_model // num_heads
-        rope = RoPE(theta=rope_theta, d_k=d_k, max_seq_len=context_length)
+        rope = (
+            RoPE(theta=rope_theta, d_k=d_k, max_seq_len=context_length)
+            if rope_theta > 0 else None
+        )
 
         self.layers = nn.ModuleList([
             TransformerBlock(

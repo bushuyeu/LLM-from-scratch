@@ -169,7 +169,10 @@ def apply_defaults(args: argparse.Namespace) -> argparse.Namespace:
             setattr(args, key, val)
     # Derive d_ff from d_model if still unset
     if args.d_ff is None:
-        args.d_ff = swiglu_d_ff(args.d_model)
+        if getattr(args, "ffn_silu", False):
+            args.d_ff = 4 * args.d_model  # standard FFN: 4 × d_model
+        else:
+            args.d_ff = swiglu_d_ff(args.d_model)
     return args
 
 
