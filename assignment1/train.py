@@ -8,6 +8,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from contextlib import nullcontext
 import json
 import math
 import os
@@ -157,6 +158,10 @@ def parse_args() -> argparse.Namespace:
     # performance
     p.add_argument("--compile", action="store_true",
                     help="JIT-compile model with torch.compile")
+    p.add_argument("--bf16", action="store_true",
+                    help="Enable bf16 mixed precision training")
+    p.add_argument("--grad_accum_steps", type=int, default=1,
+                    help="Gradient accumulation steps (effective batch = batch_size * accum)")
 
     return p.parse_args()
 
@@ -184,13 +189,16 @@ def estimate_val_loss(
     context_length: int,
     device: str,
     num_batches: int,
+    amp_ctx=None,
 ) -> float:
     """Estimate validation loss over num_batches random batches."""
+    amp_ctx = amp_ctx or nullcontext()
     model.eval()
     total_loss = 0.0
     for _ in range(num_batches):
         x, y = get_batch(val_data, batch_size, context_length, device)
-        logits = model(x)
+        with amp_ctx:
+            logits = model(x)
         # Reshape for cross_entropy: (batch*seq, vocab) vs (batch*seq,)
         B, S, V = logits.shape
         loss = cross_entropy(logits.view(B * S, V), y.view(B * S))
@@ -316,9 +324,17 @@ def main():
     running_loss = 0.0
     tokens_processed = 0
 
+    accum = args.grad_accum_steps
+    tokens_per_step = args.batch_size * args.context_length * accum
+    use_amp = args.bf16 and device.startswith("cuda")
+    amp_ctx = torch.amp.autocast("cuda", dtype=torch.bfloat16) if use_amp else nullcontext()
+    if use_amp:
+        print("bf16 mixed precision enabled")
+
     print(f"\nStarting training for {args.max_iters} iterations...")
     print(f"  Batch size: {args.batch_size}, Context length: {args.context_length}")
-    print(f"  Tokens per step: {args.batch_size * args.context_length:,}")
+    print(f"  Grad accum steps: {accum}")
+    print(f"  Tokens per step: {tokens_per_step:,}")
     print()
 
     for it in range(start_iter, args.max_iters):
@@ -333,16 +349,19 @@ def main():
         for param_group in optimizer.param_groups:
             param_group["lr"] = lr
 
-        # Forward pass
-        x, y = get_batch(train_data, args.batch_size, args.context_length, device)
-        logits = model(x)
-
-        B, S, V = logits.shape
-        loss = cross_entropy(logits.view(B * S, V), y.view(B * S))
-
-        # Backward pass
+        # Forward + backward with gradient accumulation
         optimizer.zero_grad()
-        loss.backward()
+        step_loss = 0.0
+        for _micro in range(accum):
+            x, y = get_batch(train_data, args.batch_size, args.context_length, device)
+            with amp_ctx:
+                logits = model(x)
+                B, S, V = logits.shape
+                loss = cross_entropy(logits.view(B * S, V), y.view(B * S))
+                if accum > 1:
+                    loss = loss / accum
+            loss.backward()
+            step_loss += loss.item()
 
         # Gradient clipping
         if args.grad_clip > 0:
@@ -351,9 +370,9 @@ def main():
         optimizer.step()
 
         # Tracking
-        loss_val = loss.item()
+        loss_val = step_loss if accum > 1 else loss.item()
         running_loss += loss_val
-        tokens_processed += args.batch_size * args.context_length
+        tokens_processed += tokens_per_step
 
         # Log training loss
         if (it + 1) % args.log_interval == 0:
@@ -375,7 +394,7 @@ def main():
         if val_data is not None and (it + 1) % args.eval_interval == 0:
             val_loss = estimate_val_loss(
                 model, val_data, args.batch_size, args.context_length,
-                device, args.eval_batches,
+                device, args.eval_batches, amp_ctx=amp_ctx,
             )
             print(f"  >>> val loss: {val_loss:.4f} | perplexity: {math.exp(val_loss):.2f}")
             if wandb_run:

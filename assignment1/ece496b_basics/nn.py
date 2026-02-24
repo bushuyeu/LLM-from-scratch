@@ -265,10 +265,10 @@ class MultiHeadSelfAttention(nn.Module):
             Q = self.rope(Q, pos)
             K = self.rope(K, pos)
 
-        # Causal mask — each position can only attend to itself and earlier
-        causal_mask = torch.tril(torch.ones(seq_len, seq_len, device=x.device, dtype=torch.bool))
-
-        attn_out = scaled_dot_product_attention(Q, K, V, mask=causal_mask)
+        # Use PyTorch's fused SDPA (dispatches to FlashAttention-2 on CUDA)
+        attn_out = torch.nn.functional.scaled_dot_product_attention(
+            Q, K, V, is_causal=True,
+        )
 
         # Concatenate heads: (..., num_heads, seq, d_k) → (..., seq, d_model)
         attn_out = attn_out.transpose(-3, -2).contiguous().view(*batch_dims, seq_len, -1)
