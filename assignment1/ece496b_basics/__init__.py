@@ -4,7 +4,7 @@ try:
     from .tokenizer import Tokenizer
     from .nn import (
         softmax, silu, cross_entropy, gradient_clipping,
-        Linear, Embedding, RMSNorm, SwiGLU, RoPE,
+        Linear, Embedding, RMSNorm, SwiGLU, FFN_SiLU, RoPE,
         scaled_dot_product_attention, MultiHeadSelfAttention,
         TransformerBlock, TransformerLM,
         generate,

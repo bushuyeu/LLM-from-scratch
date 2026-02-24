@@ -102,7 +102,7 @@ class Embedding(nn.Module):
 
 
 class RMSNorm(nn.Module):
-    """Root Mean Square Layer Normalization (Zhang & Sennrich, 2019).
+    """Root Mean Square Layer Normalization
 
     Normalizes by RMS of activations (no mean centering), then applies
     a learned element-wise scale. Simpler and faster than LayerNorm.
@@ -277,26 +277,53 @@ class MultiHeadSelfAttention(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# Transformer Block — pre-norm architecture (GPT-style)
+# Transformer Block 
 # ---------------------------------------------------------------------------
 
-class TransformerBlock(nn.Module):
-    """Pre-norm Transformer block: LN → Attention → residual → LN → FFN → residual.
+class FFN_SiLU(nn.Module):
+    """Standard SiLU feed-forward: W2 · SiLU(W1 · x). Two matrices, no gating."""
 
-    Pre-norm (applying normalization before the sublayer) is more stable
-    during training than post-norm, which is why modern LLMs use it.
+    def __init__(self, d_model: int, d_ff: int):
+        super().__init__()
+        self.w1 = Linear(d_model, d_ff)
+        self.w2 = Linear(d_ff, d_model)
+
+    def forward(self, x: Tensor) -> Tensor:
+        return self.w2(silu(self.w1(x)))
+
+
+class TransformerBlock(nn.Module):
+    """Transformer block supporting pre-norm (default) and post-norm variants,
+    optional RMSNorm removal, and FFN_SiLU alternative to SwiGLU.
     """
 
-    def __init__(self, d_model: int, num_heads: int, d_ff: int, rope: RoPE | None = None):
+    def __init__(
+        self,
+        d_model: int,
+        num_heads: int,
+        d_ff: int,
+        rope: RoPE | None = None,
+        use_rmsnorm: bool = True,
+        post_norm: bool = False,
+        use_swiglu: bool = True,
+    ):
         super().__init__()
-        self.ln1 = RMSNorm(d_model)                       # norm before attention
+        norm_cls = RMSNorm if use_rmsnorm else nn.Identity
+        self.ln1 = norm_cls(d_model) if use_rmsnorm else nn.Identity()
         self.attn = MultiHeadSelfAttention(d_model, num_heads, rope=rope)
-        self.ln2 = RMSNorm(d_model)                        # norm before FFN
-        self.ffn = SwiGLU(d_model, d_ff)
+        self.ln2 = norm_cls(d_model) if use_rmsnorm else nn.Identity()
+        self.ffn = SwiGLU(d_model, d_ff) if use_swiglu else FFN_SiLU(d_model, d_ff)
+        self.post_norm = post_norm
 
     def forward(self, x: Tensor, token_positions: Tensor | None = None) -> Tensor:
-        x = x + self.attn(self.ln1(x), token_positions=token_positions)  # residual + attn
-        x = x + self.ffn(self.ln2(x))                     # residual + FFN
+        if self.post_norm:
+            # Post-norm: sublayer → norm → residual
+            x = x + self.ln1(self.attn(x, token_positions=token_positions))
+            x = x + self.ln2(self.ffn(x))
+        else:
+            # Pre-norm (default): norm → sublayer → residual
+            x = x + self.attn(self.ln1(x), token_positions=token_positions)
+            x = x + self.ffn(self.ln2(x))
         return x
 
 
@@ -320,6 +347,9 @@ class TransformerLM(nn.Module):
         num_heads: int,
         d_ff: int,
         rope_theta: float = 10000.0,
+        use_rmsnorm: bool = True,
+        post_norm: bool = False,
+        use_swiglu: bool = True,
     ):
         super().__init__()
         self.context_length = context_length
@@ -330,10 +360,13 @@ class TransformerLM(nn.Module):
         rope = RoPE(theta=rope_theta, d_k=d_k, max_seq_len=context_length)
 
         self.layers = nn.ModuleList([
-            TransformerBlock(d_model, num_heads, d_ff, rope=rope)
+            TransformerBlock(
+                d_model, num_heads, d_ff, rope=rope,
+                use_rmsnorm=use_rmsnorm, post_norm=post_norm, use_swiglu=use_swiglu,
+            )
             for _ in range(num_layers)
         ])
-        self.ln_final = RMSNorm(d_model)                   # final norm before output
+        self.ln_final = RMSNorm(d_model) if use_rmsnorm else nn.Identity()
         self.lm_head = Linear(d_model, vocab_size)          # project to vocab logits
 
     def forward(self, token_ids: Tensor) -> Tensor:
@@ -355,7 +388,7 @@ class TransformerLM(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# Text generation / decoding
+# Text generation 
 # ---------------------------------------------------------------------------
 
 @torch.no_grad()
@@ -398,7 +431,7 @@ def generate(
         # Convert to probabilities
         probs = softmax(next_logits, dim=-1)
 
-        # Top-p (nucleus) sampling
+        # Top-p sampling
         if top_p < 1.0:
             sorted_probs, sorted_indices = torch.sort(probs, descending=True)
             cumulative_probs = torch.cumsum(sorted_probs, dim=-1)

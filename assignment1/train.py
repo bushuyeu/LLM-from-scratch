@@ -245,6 +245,9 @@ def main():
         num_heads=args.num_heads,
         d_ff=args.d_ff,
         rope_theta=args.rope_theta if not args.no_rope else 0.0,
+        use_rmsnorm=not args.no_rmsnorm,
+        post_norm=args.post_norm,
+        use_swiglu=not args.ffn_silu,
     )
 
     # Weight tying: share embedding and lm_head weights
