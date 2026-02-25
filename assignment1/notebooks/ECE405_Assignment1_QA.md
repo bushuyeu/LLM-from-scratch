@@ -1,5 +1,6 @@
 # ECE405 Assignment 1 
 
+Github: https://github.com/bushuyeu/LLM-from-scratch
 
 **Code locations:**
 - `ece496b_basics/train_bpe.py` — BPE tokenizer training
@@ -591,14 +592,16 @@ Plausible-sounding phrases without structure.
 
 **Key experiment results:**
 
-| Experiment | Config | Params | BS | Steps | Val Loss | Time | Tokens |
-|---|---|---|---|---|---|---|---|
-| **V2-1** | **d=512, 8L, 8h + weight tying** | **42M** | **128** | **40K** | **3.738** | **0.65h** | **1.31B** |
-| V2-2 | d=640, 10L, 10h + weight tying | ~70M | 128 | 20K | 4.744 | 0.43h | 655M |
-| V2-3 | d=512, 8L, 8h + weight tying | 42M | 256 | 20K | 3.816 | 0.60h | 1.31B |
+| Experiment | Config | Params | BS | Steps | Val Loss | Time | Tokens |                  
+|---|---|---|---|---|---|---|---|                                                         
+| **V2-1** | **d=512, 8L, 8h + weight tying** | **42M** | **128** | **40K** | **3.738** | +**0.65h** | **1.31B** |                                                                   
+| V2-2 | d=640, 10L, 10h + weight tying | ~70M | 128 | 20K | 4.744 | 0.43h | 655M |       
+| V2-3 | d=512, 8L, 8h + weight tying | 42M | 256 | 20K | 3.816 | 0.60h | 1.31B |  
 
-**Chinchilla scaling in action:** The 42M model trained on 1.31B tokens (31 tokens/param) crushes the 70M model trained on 655M tokens (9 tokens/param). Within a fixed compute budget, data beats parameters. More frequent smaller updates (V2-1: bs=128, 40K steps) also beat less frequent larger updates (V2-3: bs=256, 20K steps).
+- The 42M model trained on 1.31B tokens (31 tokens/param) outperforms the 70M model trained on 655M tokens (9 tokens/param). Within a fixed compute budget, data beats parameters. 
+
+- More frequent smaller updates (V2-1: bs=128, 40K steps) beat less frequent larger updates (V2-3: bs=256, 20K steps)
 
 Throughput on GH200 (small model, bf16 + flash + torch.compile): 556K tok/s (bs=128), 602K tok/s (bs=256). Baseline fp32 without flash: 329K tok/s.
 
-*Learning curves: see `notebooks/experiments_analysis.ipynb`, cells 21–22 — leaderboard val loss vs tokens and summary table.*
+*Learning curves: see `notebooks/experiments_analysis.ipynb`, cells 21–22 — leaderboard val loss vs tokens and summary table.*                      
