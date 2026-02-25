@@ -4,6 +4,8 @@
 
 ### 2.1 Looking at the data (look_at_cc)
 
+File: `/notebooks/ECE405_Assignment2.ipynb` - section 2.1
+
 #### (a) First page in WARC file
 
 The first response record in the WARC file has the URL `http://0371rykj.com/ipfhsb/34.html`, crawled on 2025-04-17. The page is no longer accessible. From the raw HTML, the `<title>` and `<meta>` tags contain HTML-encoded Chinese characters that decode to explicit adult content keywords, while the actual `<body>` content is about Shanghai Linpin Instrument Stock Co Ltd, a manufacturer of temperature and humidity testing chambers.
@@ -58,6 +60,12 @@ This example could be useful for training a model intended to assist with indust
 
 ### 2.2 HTML to text conversion (extract_text)
 
+File: `/notebooks/ECE405_Assignment2.ipynb` - section 2.2
+
+#### (a) Text extraction function
+
+File: `cs336_data/extract.py` — `extract_text_from_html_bytes(html_bytes)` decodes raw HTML bytes (detecting encoding if UTF-8 fails) and extracts visible text using Resiliparse's `extract_plain_text`. Adapter in `tests/adapters.py:run_extract_text_from_html_bytes`.
+
 #### (b) Compare extraction methods
 
 The Resiliparse extraction (10,165 chars) is nearly 3x longer than the WET extraction (3,496 chars) and significantly noisier — it retains HTML structural artifacts like `<th id="gckmo">`, whitespace, bullet point markers from hidden `display:none` divs, and nested navigation elements. 
@@ -68,13 +76,31 @@ The WET extraction is more compact and readable, stripping most structural marku
 
 ### 2.3 Language identification (language_identification)
 
+#### (a) Language identification function
+
+File: `cs336_data/language_identification.py` — `identify_language(text)` returns `(language_code, confidence_score)` using fastText's `lid.176.bin` model. Adapter in `tests/adapters.py:run_identify_language`.
+
 #### (b) Downstream issues from language filtering
 
-Language ID errors can cause several downstream problems. False negatives (e.g., English documents misclassified as another language) remove valuable training data, which is especially costly if the misclassified documents are high-quality or cover rare domains. False positives (e.g., non-English documents classified as English) inject foreign-language text into what is supposed to be a monolingual corpus, which can confuse the model and degrade generation quality. Mixed-language documents — common on the web (e.g., code with English comments on a Chinese site) — are particularly problematic since the classifier must pick one label, potentially discarding useful content. In a higher-stakes deployment, these issues could be mitigated by using an ensemble of language classifiers, applying language ID at the paragraph level rather than the document level, and setting conservative confidence thresholds with human review for borderline cases.
+Language ID errors can cause several downstream problems: 
+- False negatives (e.g., English documents misclassified as another language) remove valuable training data; 
+- False positives (e.g., non-English documents classified as English) can confuse the model and degrade generation quality. 
+- Mixed-language documents(e.g., code with English comments on a Chinese site) are particularly problematic since the classifier must pick one label, potentially discarding useful content. 
+
+In a higher-stakes deployment, these issues could be mitigated by using several language classifiers, applying language ID at a sub-document level.
 
 #### (c) Manual language ID on 20 examples
 
-*TODO: Run the notebook cell, then fill in with actual observations from the 20-sample output. Note any classifier errors, what fraction are English, and suggest a confidence threshold.*
+File: `/notebooks/ECE405_Assignment2.ipynb` - section 2.3 (c)
+
+Of 20 randomly sampled WET records, the classifier produced 19 correct predictions and 1 error:
+
+- **Record 1** (`bagsguccistoer.com`): classified as Indonesian (`id`, 0.55) but the text is Thai. The low confidence reflects genuine uncertainty on a mixed-language spam page.
+
+
+4 out of 20 documents (20%) are English (Records 4, 9, 10, 12, 19), though Record 4 is a nearly-empty frames page and Record 12 is a suspended-hosting notice. 
+
+A confidence threshold of **0.80** would be suitable for English filtering: it retains all genuine English pages in this sample while excluding misclassified or ambiguous documents. Pages below this threshold (like Record 1 at 0.55) tend to be spam or mixed-language content that would be low-quality training data.
 
 ---
 
