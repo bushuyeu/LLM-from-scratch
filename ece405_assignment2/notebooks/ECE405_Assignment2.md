@@ -118,15 +118,27 @@ Naive regex-based PII filtering creates problems in both directions. False posit
 
 File: `/notebooks/ECE405_Assignment2.ipynb` - section 2.4 (5)
 
-*TODO: Run notebook cell, then fill in with observations from 20-sample PII masking output.*
+Of 100 WARC pages examined, all 100 triggered at least one PII mask. Among 20 random examples, false positives dominate:
+
+- **Phone regex** is the worst offender: it matches Blogger post IDs (Example 1: `blog-|||PHONE_NUMBER|||140222694`), calendar date sequences (Example 9), Chinese ICP registration numbers (Example 12: `蜀ICP备|||PHONE_NUMBER|||号`), government license numbers (Example 18), and article/element IDs (Examples 8, 19, 20). Roughly half of all phone "detections" are false positives matching arbitrary 10-digit numeric sequences.
+- **Email regex** falsely matches git SSH URLs (Example 13: `git clone |||EMAIL_ADDRESS|||:packages/...`) and Blogger profile URLs (Example 1).
+- **False negatives**: international phone formats like `+48 785 776 007` (Example 6, Polish numbers) are not caught because the regex only handles US 10-digit patterns. Pre-obfuscated emails like `[email protected]` (Example 17) are also missed.
+
+The phone regex has the poorest precision — any 10-digit number matches regardless of context. Adding word boundaries, requiring separator characters, or restricting to known country formats would significantly reduce false positives.
 
 ---
 
 ### 2.5 Harmful content (harmful_content)
 
+#### (a)–(b) Harmful content classifiers
+
+File: `cs336_data/harmful_content.py` — `classify_nsfw(text)` and `classify_toxic_speech(text)` use Dolma/Jigsaw fastText bigram models to classify text as `nsfw`/`non-nsfw` or `toxic`/`non-toxic` with confidence scores. Models are lazy-loaded and cached. Adapters in `tests/adapters.py`.
+
 #### (3) Downstream problems from content filters
 
-*TODO: Discuss problems from applying harmful content filters to training data.*
+Aggressive content filtering creates systematic biases in training data. Documents discussing sexual health, LGBTQ+ topics, or reproductive rights are disproportionately flagged as NSFW, leading to models that refuse or underperform on legitimate medical and social queries. Similarly, toxic speech classifiers trained on English data penalize African-American Vernacular English (AAVE) and other dialects at higher rates, effectively filtering out text from marginalized communities. The resulting model inherits these biases: it may generate sterile, overly cautious responses on health topics while being subtly worse at understanding non-standard dialects.
+
+On the flip side, under-filtering leaves harmful content in training data. A model trained on retained toxic text may reproduce slurs, hate speech, or harassment patterns when prompted — or even unprompted, if toxic patterns are sufficiently common in the data. The threshold choice is a precision-recall tradeoff: too aggressive removes valuable content, too permissive leaves harmful content in.
 
 #### (4) Classifier evaluation
 
