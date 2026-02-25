@@ -2,9 +2,6 @@
 
 **Pavel Bushuyeu** | February 2025
 
-I built a complete transformer language model pipeline from scratch -- tokenization, architecture, training, and text generation -- following the Llama/GPT decoder-only design. Everything below the PyTorch autograd boundary is hand-written: no `nn.Linear`, no `nn.LayerNorm`, no HuggingFace. The goal was not to produce a state-of-the-art model, but to understand every moving part deeply enough to build one from raw tensors.
-
-The result is a 36M-parameter model that writes coherent children's stories, and a 42M-parameter model (with weight tying) that generates passable news prose -- trained on a single GPU in under an hour.
 
 **Code:** `train_bpe.py`, `tokenizer.py`, `nn.py`, `optimizer.py`, `data.py`, `checkpointing.py`, `train.py` -- all in `ece496b_basics/` and the project root.
 
