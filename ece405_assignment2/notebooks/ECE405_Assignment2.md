@@ -1,0 +1,139 @@
+# ECE405 Assignment 2 — Written Responses
+
+## Section 2: Filtering Common Crawl
+
+### 2.1 Looking at the data (look_at_cc)
+
+#### (a) First page in WARC file
+
+The first response record in the WARC file has the URL `http://0371rykj.com/ipfhsb/34.html`, crawled on 2025-04-17. The page is no longer accessible. From the raw HTML, the `<title>` and `<meta>` tags contain HTML-encoded Chinese characters that decode to explicit adult content keywords, while the actual `<body>` content is about Shanghai Linpin Instrument Stock Co Ltd, a manufacturer of temperature and humidity testing chambers.
+
+#### (b) Corresponding WET file
+
+The WET extraction of this page begins with the decoded explicit Chinese keywords from the title/meta tags, immediately followed by navigation menu elements, product specifications, company boilerplate, and news headlines. 
+
+A text extractor should have kept only the product description and specifications. 
+
+Training a model on text like this risks teaching it to reproduce SEO spam patterns, boilerplates and UI elements as if that was natural text. 
+
+However, the product specification table contains useful information (temperature ranges, model dimensions, component details) that could be valuable for a model that needs to answer questions about this equipment.
+
+#### (c) What makes a good training example
+
+This example could be useful for training a model intended to assist with industrial equipment specifications or product information. It would not be useful for training a general-purpose English language model, since it consists of Chinese text polluted with explicit SEO spam keywords and navigation boilerplate.
+
+#### (d) Annotate 25 WET records
+
+| # | URL | Language | Domain | Type | Notes |
+|---|-----|----------|--------|------|-------|
+| 1 | 0371rykj.com | Chinese | SEO spam domain | Product page with SEO spam | Explicit keywords in title/meta, actual content is industrial equipment |
+| 2 | chinatikfans.com | Chinese | Fan forum | Discuz forum blog post | Fan site for Thai actor Tik Jesdaporn; personal blog entry from 2010 |
+| 3 | 13.usnccm.org | English | Academic (.org) | Conference homepage | 13th US National Congress on Computational Mechanics (2015, San Diego).  |
+| 4 | utchat888.com | Chinese (Traditional) | Adult chat platform | Livestream profile page | Adult video chat service |
+| 5 | 176766.cn | Chinese | SEO spam domain | Product page with SEO spam | Explicit keywords in title, actual content about some instruments |
+| 6 | 178mh.com | N/A | Broken site | 404 error | Only 17 chars: (template not found) |
+| 7 | tgtg97.com | Chinese (Traditional) | Adult chat platform | Livestream profile page | Same platform template as Record 4 |
+| 8 | 18sex.v340.info | Chinese (Traditional) | Adult chat platform | Directory listing | Same platform template as Record 4 |
+| 9 | klimtoren.be | Dutch | Education blog (.be) | Teacher classroom blog | Short birthday post |
+| 10 | mysch.gr | Greek | Education (.gr) | Forum search page | Greek education support helpdesk |
+| 11 | mysch.gr | Greek | Education (.gr) | Forum login page | Same site as #10, login page |
+| 12 | yhxzseo.com | Chinese | Gambling/SEO spam | Fake app landing page | Gambling platform disguised as tech review site |
+| 13 | 20com20.fr | Turkish | Tech documentation (.fr) | Apache HTTP docs sitemap | Auto-translated Apache 2.4 documentation. |
+| 14 | 24ktcasino.net | English | Gambling blog | Blog article | Article about Laos casinos. |
+| 15 | 2kgames.eu | English | Broken site | 404 error | Only 34 chars: "404 Not Found" from nginx |
+| 16 | yizhangting.com | Chinese | Gambling/SEO spam | Fake health article | Lottery platform content injected into health site template |
+| 17 | 303323.com | Chinese (Traditional) | Medical devices | Product article | Article about electrocautery in minimally invasive GI surgery. |
+| 18 | 30bad.com | Chinese | Pirate streaming | Anime streaming page | Streaming site for anime with boilerplate UI |
+| 19 | 312001.net | Chinese | Healthcare (.net) | Community health center | Shaoxing community health center website. |
+| 20 | mwe075.com | Chinese (Traditional) | Adult chat platform | Livestream profile page | Same adult chat template as Record 4 |
+| 21 | schoollibrary.edu.pe.ca | English | School library (.edu) | Library catalog search | PEI school library OPAC search results. |
+| 22 | haaxz.com | Chinese (Traditional) | Adult chat platform | Livestream profile page | Same adult chat template as Record 4 |
+| 23 | haaxz.com | Chinese (Traditional) | Adult chat platform | Livestream profile page | Same domain and template as 4 |
+| 24 | 387tel.com | Chinese (Traditional) | Adult chat platform | Video chat index | Same domain and template as 4 |
+| 25 | 3diasdemarzo.blogspot.com | Spanish | Blogspot | Political blog | 2005 Spanish political blog about 11-M bombing investigation. |
+
+**Number of examples until a "high-quality" page**: Arguably **25** — Record 25 (the Spanish political blog) is the first page with substantive, coherent, original written content. Record 3 (USNCCM conference) is structurally clean but mostly navigational. Record 14 (Laos casino blog) has some substance but is gambling-related. The majority of the first 25 records consist of adult chat platform pages (~8 of 25), SEO spam sites (~4), error pages (~2), navigation-heavy institutional pages, and other low-quality content. 
+
+---
+
+### 2.2 HTML to text conversion (extract_text)
+
+#### (b) Compare extraction methods
+
+The Resiliparse extraction (10,165 chars) is nearly 3x longer than the WET extraction (3,496 chars) and significantly noisier — it retains HTML structural artifacts like `<th id="gckmo">`, whitespace, bullet point markers from hidden `display:none` divs, and nested navigation elements. 
+
+The WET extraction is more compact and readable, stripping most structural markup and producing a flatter text representation, though it still includes navigation menus and sidebar content. For this particular page, the WET extraction appears better as training data: it is cleaner and more concise, whereas the Resiliparse output would inject HTML-like artifacts into a language model's training distribution.
+
+---
+
+### 2.3 Language identification (language_identification)
+
+#### (b) Downstream issues from language filtering
+
+Language ID errors can cause several downstream problems. False negatives (e.g., English documents misclassified as another language) remove valuable training data, which is especially costly if the misclassified documents are high-quality or cover rare domains. False positives (e.g., non-English documents classified as English) inject foreign-language text into what is supposed to be a monolingual corpus, which can confuse the model and degrade generation quality. Mixed-language documents — common on the web (e.g., code with English comments on a Chinese site) — are particularly problematic since the classifier must pick one label, potentially discarding useful content. In a higher-stakes deployment, these issues could be mitigated by using an ensemble of language classifiers, applying language ID at the paragraph level rather than the document level, and setting conservative confidence thresholds with human review for borderline cases.
+
+#### (c) Manual language ID on 20 examples
+
+*TODO: Run the notebook cell, then fill in with actual observations from the 20-sample output. Note any classifier errors, what fraction are English, and suggest a confidence threshold.*
+
+---
+
+### 2.4 PII masking (mask_pii)
+
+#### (4) Downstream problems from naive PII filtering
+
+*TODO: Discuss problems that might arise when PII filters are naively applied.*
+
+#### (5) False positives and negatives
+
+*TODO: Run PII masking on extracted text, examine 20 random replacements.*
+
+---
+
+### 2.5 Harmful content (harmful_content)
+
+#### (3) Downstream problems from content filters
+
+*TODO: Discuss problems from applying harmful content filters to training data.*
+
+#### (4) Classifier evaluation
+
+*TODO: Run on extracted text, compare 20 predictions to own judgment, suggest thresholds.*
+
+---
+
+### 2.6 Quality Rules (gopher_quality_filters)
+
+#### (b) Quality filter evaluation
+
+*TODO: Run on extracted text, compare 20 filter predictions to own judgment.*
+
+---
+
+### 2.7 Quality Classifier (quality_classifier)
+
+*(Implementation only — no written questions)*
+
+---
+
+## Section 3: Deduplication
+
+*(Implementation only — no written questions)*
+
+---
+
+## Section 4: Leaderboard (Optional / Extra Credit)
+
+### inspect_filtered_data
+
+#### (a) 5 random examples from filtered data
+
+*TODO*
+
+#### (b) 5 random discarded examples
+
+*TODO*
+
+#### (c) Pipeline iterations
+
+*TODO*
