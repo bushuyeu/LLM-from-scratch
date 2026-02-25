@@ -98,7 +98,7 @@ Of 20 randomly sampled WET records, the classifier produced 19 correct predictio
 - **Record 1** (`bagsguccistoer.com`): classified as Indonesian (`id`, 0.55) but the text is Thai. The low confidence reflects genuine uncertainty on a mixed-language spam page.
 
 
-4 out of 20 documents (20%) are English (Records 4, 9, 10, 12, 19), though Record 4 is a nearly-empty frames page and Record 12 is a suspended-hosting notice. 
+4 out of 20 documents are English (Records 4, 9, 10, 12, 19), though Record 4 is a nearly empty and Record 12 is a suspended-hosting notice. 
 
 A confidence threshold of **0.80** would be suitable for English filtering: it retains all genuine English pages in this sample while excluding misclassified or ambiguous documents. Pages below this threshold (like Record 1 at 0.55) tend to be spam or mixed-language content that would be low-quality training data.
 
@@ -106,13 +106,19 @@ A confidence threshold of **0.80** would be suitable for English filtering: it r
 
 ### 2.4 PII masking (mask_pii)
 
+#### (a)–(c) PII masking functions
+
+File: `cs336_data/pii.py` — `mask_emails(text)`, `mask_phone_numbers(text)`, `mask_ips(text)` use regex to replace PII with placeholder tokens (`|||EMAIL_ADDRESS|||`, `|||PHONE_NUMBER|||`, `|||IP_ADDRESS|||`). Each returns `(masked_text, count)`. Adapters in `tests/adapters.py`.
+
 #### (4) Downstream problems from naive PII filtering
 
-*TODO: Discuss problems that might arise when PII filters are naively applied.*
+Naive regex-based PII filtering creates problems in both directions. False positives corrupt the training data: version numbers like "2.0.1.0" get masked as IP addresses, product codes or model numbers may match phone patterns, and email-like strings in code or URLs get unnecessarily redacted — all of which degrade data quality by replacing meaningful tokens with uninformative placeholders. False negatives are more dangerous: regex misses PII in non-standard formats (e.g., "john at gmail dot com", obfuscated emails), in non-Latin scripts, and entirely misses unstructured PII like names, physical addresses, or government ID numbers. A model trained on incompletely scrubbed data may memorize and reproduce real people's information, creating privacy and legal liability.
 
 #### (5) False positives and negatives
 
-*TODO: Run PII masking on extracted text, examine 20 random replacements.*
+File: `/notebooks/ECE405_Assignment2.ipynb` - section 2.4 (5)
+
+*TODO: Run notebook cell, then fill in with observations from 20-sample PII masking output.*
 
 ---
 
