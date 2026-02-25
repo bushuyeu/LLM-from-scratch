@@ -132,17 +132,29 @@ The phone regex has the poorest precision — any 10-digit number matches regard
 
 #### (a)–(b) Harmful content classifiers
 
-File: `cs336_data/harmful_content.py` — `classify_nsfw(text)` and `classify_toxic_speech(text)` use Dolma/Jigsaw fastText bigram models to classify text as `nsfw`/`non-nsfw` or `toxic`/`non-toxic` with confidence scores. Models are lazy-loaded and cached. Adapters in `tests/adapters.py`.
+File: `cs336_data/harmful_content.py` — `classify_nsfw(text)` and `classify_toxic_speech(text)` use Dolma/Jigsaw fastText models to classify text as `nsfw`/`non-nsfw` or `toxic`/`non-toxic` with confidence scores. Adapters in `tests/adapters.py`.
 
 #### (3) Downstream problems from content filters
 
-Aggressive content filtering creates systematic biases in training data. Documents discussing sexual health, LGBTQ+ topics, or reproductive rights are disproportionately flagged as NSFW, leading to models that refuse or underperform on legitimate medical and social queries. Similarly, toxic speech classifiers trained on English data penalize African-American Vernacular English (AAVE) and other dialects at higher rates, effectively filtering out text from marginalized communities. The resulting model inherits these biases: it may generate sterile, overly cautious responses on health topics while being subtly worse at understanding non-standard dialects.
+Aggressive content filtering might create biases in training data. Documents discussing sexual health, LGBTQ+ topics, etc. might be flagged as NSFW. 
 
-On the flip side, under-filtering leaves harmful content in training data. A model trained on retained toxic text may reproduce slurs, hate speech, or harassment patterns when prompted — or even unprompted, if toxic patterns are sufficiently common in the data. The threshold choice is a precision-recall tradeoff: too aggressive removes valuable content, too permissive leaves harmful content in.
+Similarly, toxic speech classifiers trained on English data might penalize some texts that hold value. The resulting model inherits these biases: it may generate sterile, overly cautious responses on health topics.
+
+On the other side, under-filtering might leave harmful content in the training data. A model trained on toxic text may reproduce slurs, hate speech, or harassment patterns, if toxic patterns are sufficiently common in the data.
 
 #### (4) Classifier evaluation
 
-*TODO: Run on extracted text, compare 20 predictions to own judgment, suggest thresholds.*
+File: `/notebooks/ECE405_Assignment2.ipynb` - section 2.5 (4)
+
+Of 20 randomly sampled pages, all 20 were classified as `non-nsfw` and all 20 as `non-toxic`. Manual review agrees with every prediction:
+
+- **True negatives (benign content):** Records 1 (MIT ballroom dance), 4/9 (Cognitive Bias Foundation), 7 (Brazilian water tank manufacturer), 8 (French design blog), 10 (film production blog), 12 (French news), 13 (Spanish political blog), 15 (board game reviews), 17 (Belgian teacher blog), 18 (Danish window cleaning), 19 (Indian academic conference) — all correctly classified.
+- **Borderline cases the classifier handled well:** Record 2 (`50899.cn`) has explicit Chinese keywords in its title/meta but the extracted body text is mostly HTML artifacts and boilerplate — the classifier correctly read the *text content* as non-nsfw (0.9999). Records 3 and 6 are Taiwanese adult video chat platforms, but again the extracted text is mostly navigation menus and UI elements, not explicit content — classified as non-nsfw with slightly lower confidence (0.9876 for Record 6). Record 5 (Russian gambling spam on a hacked Kenyan site) was correctly flagged as non-nsfw (0.9346, notably the lowest confidence in the sample).
+- **No errors detected**: 20/20 predictions match manual judgment.
+
+The sample is heavily skewed toward non-harmful content, so the classifiers were not truly stress-tested. The NSFW classifier does show useful confidence variation: pages with adult-adjacent context (Records 2, 5, 6) score lower than clean pages (0.93–0.99 vs 1.00), suggesting the model picks up on contextual signals even when the text itself isn't explicit. A threshold of **0.40** for NSFW would be appropriate to catch genuinely explicit content while avoiding false positives on these borderline navigation pages.
+
+The toxic classifier shows almost no variation (all 1.0000), which is expected since none of these pages contain hate speech. A threshold of **0.50** seems reasonable as a starting point, though a proper evaluation would require a sample with actual toxic content.
 
 ---
 
