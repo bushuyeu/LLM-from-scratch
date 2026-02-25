@@ -1,6 +1,6 @@
 # Building a Transformer Language Model from Scratch
 
-**Pavel Bushuyeu** | February 2025
+**Pavel Bushuyeu** | February 2026
 
 
 **Code:** `train_bpe.py`, `tokenizer.py`, `nn.py`, `optimizer.py`, `data.py`, `checkpointing.py`, `train.py` -- all in `ece496b_basics/` and the project root.
