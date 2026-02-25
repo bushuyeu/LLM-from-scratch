@@ -146,15 +146,15 @@ On the other side, under-filtering might leave harmful content in the training d
 
 File: `/notebooks/ECE405_Assignment2.ipynb` - section 2.5 (4)
 
-Of 20 randomly sampled pages, all 20 were classified as `non-nsfw` and all 20 as `non-toxic`. Manual review agrees with every prediction:
+Of 20 randomly sampled pages, all 20 were classified as `non-nsfw` and all 20 as `non-toxic`. Manual review found 1 NSFW error and 2 debatable cases:
 
-- **True negatives (benign content):** Records 1 (MIT ballroom dance), 4/9 (Cognitive Bias Foundation), 7 (Brazilian water tank manufacturer), 8 (French design blog), 10 (film production blog), 12 (French news), 13 (Spanish political blog), 15 (board game reviews), 17 (Belgian teacher blog), 18 (Danish window cleaning), 19 (Indian academic conference) — all correctly classified.
-- **Borderline cases the classifier handled well:** Record 2 (`50899.cn`) has explicit Chinese keywords in its title/meta but the extracted body text is mostly HTML artifacts and boilerplate — the classifier correctly read the *text content* as non-nsfw (0.9999). Records 3 and 6 are Taiwanese adult video chat platforms, but again the extracted text is mostly navigation menus and UI elements, not explicit content — classified as non-nsfw with slightly lower confidence (0.9876 for Record 6). Record 5 (Russian gambling spam on a hacked Kenyan site) was correctly flagged as non-nsfw (0.9346, notably the lowest confidence in the sample).
-- **No errors detected**: 20/20 predictions match manual judgment.
+- **False negative (NSFW):** Record 2 (`50899.cn`) contains explicit Chinese pornographic keywords directly in the extracted text ("午夜亚洲影院在线观看", "黄网人妻视频", "午夜A级性爱") yet was classified as `non-nsfw (0.9999)` with near-perfect confidence. This is a clear miss — the Dolma model was trained on English Jigsaw data and is effectively blind to NSFW content in Chinese.
+- **Debatable cases:** Records 3 and 6 are Taiwanese adult video chat platforms. The extracted text is mostly navigation menus and UI elements rather than explicit content, so `non-nsfw` is defensible — but a production pipeline might want to flag these based on context. Record 5 (Russian gambling spam on a hacked Kenyan site) scored the lowest NSFW confidence (0.9346), suggesting the model picks up some contextual signal.
+- **True negatives:** Records 1 (MIT ballroom dance), 4/9 (Cognitive Bias Foundation), 7 (Brazilian water tank manufacturer), 8 (French design blog), 10 (film production blog), 12 (French news), 13 (Spanish political blog), 15 (board game reviews), 17 (Belgian teacher blog), 18 (Danish window cleaning), 19 (Indian academic conference) — all correctly classified.
 
-The sample is heavily skewed toward non-harmful content, so the classifiers were not truly stress-tested. The NSFW classifier does show useful confidence variation: pages with adult-adjacent context (Records 2, 5, 6) score lower than clean pages (0.93–0.99 vs 1.00), suggesting the model picks up on contextual signals even when the text itself isn't explicit. A threshold of **0.40** for NSFW would be appropriate to catch genuinely explicit content while avoiding false positives on these borderline navigation pages.
+The NSFW classifier's failure on Record 2 illustrates a key limitation: **monolingual classifiers miss harmful content in other languages**. This is especially problematic for Common Crawl, which is inherently multilingual. A production pipeline should either use multilingual NSFW models or apply language-specific classifiers after the language ID step.
 
-The toxic classifier shows almost no variation (all 1.0000), which is expected since none of these pages contain hate speech. A threshold of **0.50** seems reasonable as a starting point, though a proper evaluation would require a sample with actual toxic content.
+The toxic classifier shows no variation (all 1.0000), which is expected since none of these pages contain English hate speech. Suggested thresholds: **0.40** for NSFW (to catch genuinely explicit content while tolerating borderline navigation pages), **0.50** for toxic as a starting point.
 
 ---
 
