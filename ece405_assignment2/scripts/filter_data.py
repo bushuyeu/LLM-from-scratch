@@ -29,10 +29,10 @@ from warcio.archiveiterator import ArchiveIterator
 # Add parent so cs336_data is importable
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from cs336_data.language_identification import identify_language
+from cs336_data.language_identification import identify_language, set_lid_model_path
 from cs336_data.quality_filters import gopher_quality_filter
 from cs336_data.pii import mask_emails, mask_phone_numbers, mask_ips
-from cs336_data.harmful_content import classify_nsfw, classify_toxic_speech
+from cs336_data.harmful_content import classify_nsfw, classify_toxic_speech, set_nsfw_model_path, set_toxic_model_path
 
 
 # --- Configuration ---
@@ -166,11 +166,28 @@ def main():
     parser.add_argument("--workers", type=int, default=1, help="Number of parallel workers")
     parser.add_argument("--no_quality", action="store_true", help="Skip quality classifier")
     parser.add_argument("--glob", default="*.warc.wet.gz", help="Glob pattern for WET files")
+    parser.add_argument("--models_dir", default=None, help="Directory containing model files (lid.176.bin, dolma models, quality_classifier.bin)")
     args = parser.parse_args()
 
     input_dir = pathlib.Path(args.input_dir)
     output_dir = pathlib.Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Configure model paths
+    models_dir = pathlib.Path(args.models_dir) if args.models_dir else input_dir
+    lid_path = models_dir / "lid.176.bin"
+    if lid_path.exists():
+        set_lid_model_path(str(lid_path))
+    nsfw_path = models_dir / "dolma_fasttext_nsfw_jigsaw_model.bin"
+    if nsfw_path.exists():
+        set_nsfw_model_path(str(nsfw_path))
+    toxic_path = models_dir / "dolma_fasttext_hatespeech_jigsaw_model.bin"
+    if toxic_path.exists():
+        set_toxic_model_path(str(toxic_path))
+    quality_path = models_dir / "quality_classifier.bin"
+    if quality_path.exists():
+        from cs336_data.quality_filters import set_quality_model_path
+        set_quality_model_path(str(quality_path))
 
     wet_files = sorted(input_dir.glob(args.glob))
     if not wet_files:
