@@ -185,17 +185,47 @@ This filter is effective as a first-pass filter for removing navigation dumps, e
 
 ### 2.7 Quality Classifier (quality_classifier)
 
-*(Implementation only — no written questions)*
+File: `cs336_data/quality_filters.py` — `classify_quality(text)` returns `(label, confidence)` where label is `"wiki"` (high quality) or `"cc"` (low quality). Uses a fastText classifier trained on Wikipedia-linked pages (positive) vs random Common Crawl pages (negative). Model loaded lazily to avoid breaking imports when fasttext is not installed. Adapter in `tests/adapters.py:run_classify_quality`.
+
+Training pipeline: `/notebooks/ECE405_Assignment2.ipynb` - section 2.7 (cells 38–43).
 
 ---
 
 ## Section 3: Deduplication
 
-*(Implementation only — no written questions)*
+### 3.1 Exact Line Deduplication (exact_deduplication)
+
+File: `cs336_data/deduplication.py` — `exact_line_deduplication(input_files, output_directory)` removes lines that appear more than once across all input files. Two-pass approach: first counts line frequencies using MD5 hashes for memory efficiency, then rewrites each file keeping only unique lines. Adapter in `tests/adapters.py:run_exact_line_deduplication`.
+
+### 3.2 MinHash + LSH Deduplication (minhash_deduplication)
+
+File: `cs336_data/deduplication.py` — `minhash_deduplication(input_files, num_hashes, num_bands, ngrams, jaccard_threshold, output_directory)` removes fuzzy duplicate documents. Text preprocessing: lowercase, NFD normalization, accent/punctuation removal. Computes word n-gram minhash signatures using mmh3, applies LSH banding to find candidate pairs, verifies with exact Jaccard similarity, and uses union-find to cluster duplicates (keeping one per cluster). Adapter in `tests/adapters.py:run_minhash_deduplication`.
 
 ---
 
-## Section 4: Leaderboard (Optional / Extra Credit)
+## Section 4: Leaderboard — Filter Data for Language Modeling (filter_data)
+
+### (a) Filter pipeline script
+
+File: `scripts/filter_data.py` — Filters CC WET files through the full pipeline in order: language identification (English, >= 0.80), Gopher quality rules, quality classifier (optional, >= 0.50), harmful content removal (NSFW/toxic, >= 0.50), PII masking. Supports parallel processing via `concurrent.futures`. Reports per-filter stats and runtime estimates for 5,000 and 100,000 WET files.
+
+### (b) Runtime
+
+*Estimates below — update with actual measurements after running on Colab/cluster.*
+
+Each WET file is ~75 MB compressed (~40K records). The dominant costs per record are:
+- **NLTK tokenization** (Gopher filter): ~5–10 ms/record
+- **fastText classifiers** (lang ID, NSFW, toxic, quality): ~0.5–1 ms/record each
+- **Regex PII masking**: ~0.1 ms/record
+
+Estimated per-file processing time: **3–5 minutes** (single core). Language ID and Gopher filter eliminate most records early, so later filters run on fewer documents.
+
+| Scale | Files | Single-core | 16 workers |
+|-------|-------|-------------|------------|
+| Assignment | 5,000 | ~300 hours | ~19 hours |
+| Full CC dump | 100,000 | ~6,000 hours | ~375 hours |
+
+With a Slurm cluster (e.g., 64 parallel workers), 5,000 WET files could be processed in ~5 hours. The full Common Crawl dump (100,000 WETs) would take ~4 days at 64 workers.
 
 ### inspect_filtered_data
 
