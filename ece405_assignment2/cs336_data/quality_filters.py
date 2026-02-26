@@ -1,3 +1,5 @@
+import os
+
 import nltk
 
 try:
@@ -37,3 +39,45 @@ def gopher_quality_filter(text: str) -> bool:
         return False
 
     return True
+
+
+# --- Quality Classifier (fastText) ---
+
+_quality_model = None
+
+_ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
+_QUALITY_MODEL_PATH = os.environ.get(
+    "QUALITY_MODEL_PATH",
+    os.path.join(_ASSETS_DIR, "quality_classifier.bin"),
+)
+
+
+def set_quality_model_path(path: str):
+    global _QUALITY_MODEL_PATH, _quality_model
+    _QUALITY_MODEL_PATH = path
+    _quality_model = None
+
+
+def _get_quality_model():
+    global _quality_model
+    if _quality_model is None:
+        import fasttext
+        fasttext.FastText.eprint = lambda x: None
+        _quality_model = fasttext.load_model(_QUALITY_MODEL_PATH)
+    return _quality_model
+
+
+def classify_quality(text: str) -> tuple[str, float]:
+    """Classify text as 'wiki' (high quality) or 'cc' (low quality)."""
+    model = _get_quality_model()
+    text_clean = text.replace("\n", " ").strip()
+    predictions = model.predict(text_clean, k=2)
+    labels = predictions[0]
+    scores = predictions[1]
+
+    # Map fastText labels to expected labels
+    label_map = {"__label__wiki": "wiki", "__label__cc": "cc"}
+
+    top_label = label_map.get(labels[0], labels[0])
+    top_score = float(scores[0])
+    return top_label, top_score

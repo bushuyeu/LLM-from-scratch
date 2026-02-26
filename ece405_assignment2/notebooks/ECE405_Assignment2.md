@@ -168,7 +168,18 @@ File: `cs336_data/quality_filters.py` — `gopher_quality_filter(text)` returns 
 
 #### (b) Quality filter evaluation
 
-*TODO: Run on extracted text, compare 20 filter predictions to own judgment.*
+File: `/notebooks/ECE405_Assignment2.ipynb` - section 2.6 (b)
+
+Of 20 randomly sampled pages, 3 passed and 17 failed. The dominant failure mode is **too few alphabetic words** (14 of 17 failures). The filter correctly rejects:
+
+- Spam/gambling pages with mixed alphanumeric content (Record 1: Chinese gambling app, mean word length 34.6)
+- Adult platform pages with mostly UI elements (Records 3, 13, 17, 18)
+- Navigation-heavy institutional pages (Records 5, 6, 8, 14, 15)
+- Near-empty pages (Record 12: 23 words, suspended hosting notice)
+
+The 3 passing pages: Record 7 (Indian academic conference) and Record 19 (Spanish photo gallery) barely pass at 82–84% alphabetic words and consist mostly of boilerplate. Record 20 (Brazilian water tank manufacturer, 16K words) passes all thresholds but has repetitive content.
+
+This filter is effective as a first-pass filter for removing navigation dumps, error pages, and non-textual content. 
 
 ---
 
