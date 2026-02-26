@@ -2,12 +2,16 @@
 #SBATCH --job-name=quality-clf
 #SBATCH --partition=sandbox
 #SBATCH --time=04:00:00
-#SBATCH --mem=32G
-#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --cpus-per-task=2
 #SBATCH --output=quality_classifier_%j.log
 #SBATCH --error=quality_classifier_%j.err
 
 set -euo pipefail
+
+# --- Load modules ---
+module load lang/Python/3.11.5-GCCcore-13.2.0
+module load compiler/GCC/13.2.0
 
 # --- Storage paths ---
 SCRATCH="/mnt/lustre/koa/scratch/pavelb/quality_classifier"
@@ -22,7 +26,7 @@ echo "Scratch: ${SCRATCH}"
 echo "=== Setting up Python venv ==="
 python3 -m venv "${VENV_DIR}"
 source "${VENV_DIR}/bin/activate"
-pip install --quiet fasttext warcio resiliparse nltk gdown
+pip install --quiet fasttext warcio resiliparse nltk pybind11
 
 # Download NLTK punkt tokenizer
 python3 -c "import nltk; nltk.download('punkt_tab', quiet=True)"
@@ -30,8 +34,8 @@ python3 -c "import nltk; nltk.download('punkt_tab', quiet=True)"
 # --- Step 1: Download Wikipedia URLs ---
 WIKI_URLS="${DATA_DIR}/enwiki-20240420-extracted_urls.txt.gz"
 if [ ! -f "${WIKI_URLS}" ]; then
-    echo "=== Downloading Wikipedia URLs from Google Drive ==="
-    python3 -c "import gdown; gdown.download(id='1hjlgyWSuMRDf-G0AXgGBWZmvjPJdDWc7', output='${WIKI_URLS}', quiet=False)"
+    echo "=== Downloading Wikipedia URLs from Stanford ==="
+    wget -q -O "${WIKI_URLS}" "https://nlp.stanford.edu/data/nfliu/cs336-spring-2024/assignment4/enwiki-20240420-extracted_urls.txt.gz"
 fi
 echo "Wikipedia URLs: $(zcat "${WIKI_URLS}" | wc -l) total"
 
@@ -75,7 +79,7 @@ fi
 echo "=== Extracting text and building training data ==="
 TRAIN_FILE="${DATA_DIR}/quality_train.txt"
 
-python3 << 'PYTHON_SCRIPT'
+python3 << PYTHON_SCRIPT
 import random
 import sys
 from warcio.archiveiterator import ArchiveIterator
