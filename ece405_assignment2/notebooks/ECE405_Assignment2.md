@@ -209,23 +209,30 @@ File: `cs336_data/deduplication.py` — `minhash_deduplication(input_files, num_
 
 File: `scripts/filter_data.py` — Filters CC WET files through the full pipeline in order: language identification (English, >= 0.80), Gopher quality rules, quality classifier (optional, >= 0.50), harmful content removal (NSFW/toxic, >= 0.50), PII masking. Supports parallel processing via `concurrent.futures`. Reports per-filter stats and runtime estimates for 5,000 and 100,000 WET files.
 
-### (b) Runtime
+### (b) Runtime and filter breakdown
 
-*Estimates below — update with actual measurements after running on Colab/cluster.*
+Measured on a single CC WET file (27,173 records, Colab single-core):
 
-Each WET file is ~75 MB compressed (~40K records). The dominant costs per record are:
-- **NLTK tokenization** (Gopher filter): ~5–10 ms/record
-- **fastText classifiers** (lang ID, NSFW, toxic, quality): ~0.5–1 ms/record each
-- **Regex PII masking**: ~0.1 ms/record
+| Filter step | Removed | % of total |
+|-------------|---------|------------|
+| Empty/short (< 100 chars) | 452 | 1.7% |
+| Language ID (non-English) | 21,358 | 78.6% |
+| Gopher quality rules | 1,185 | 4.4% |
+| Quality classifier (cc) | 90 | 0.3% |
+| NSFW | 8 | 0.0% |
+| Toxic | 0 | 0.0% |
+| **Kept** | **4,080** | **15.0%** |
 
-Estimated per-file processing time: **3–5 minutes** (single core). Language ID and Gopher filter eliminate most records early, so later filters run on fewer documents.
+PII masked in kept documents: 1,737 emails, 3,050 phones, 84 IPs.
 
-| Scale | Files | Single-core | 16 workers |
-|-------|-------|-------------|------------|
-| Assignment | 5,000 | ~300 hours | ~19 hours |
-| Full CC dump | 100,000 | ~6,000 hours | ~375 hours |
+Language filtering dominates — 78.6% of records are non-English. Gopher rules catch another 4.4% (short/low-quality English pages). The quality classifier, NSFW, and toxic filters have minimal impact since most low-quality content is already removed upstream.
 
-With a Slurm cluster (e.g., 64 parallel workers), 5,000 WET files could be processed in ~5 hours. The full Common Crawl dump (100,000 WETs) would take ~4 days at 64 workers.
+**Processing time**: 97.8 seconds per WET file (single core).
+
+| Scale | Files | Single-core | 16 workers | 64 workers |
+|-------|-------|-------------|------------|------------|
+| Assignment | 5,000 | ~136 hours | ~8.5 hours | ~2.1 hours |
+| Full CC dump | 100,000 | ~2,718 hours | ~170 hours | ~42 hours |
 
 ### inspect_filtered_data
 
