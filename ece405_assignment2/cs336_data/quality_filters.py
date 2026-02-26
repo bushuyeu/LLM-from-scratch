@@ -27,7 +27,7 @@ def gopher_quality_filter(text: str) -> bool:
     # Ellipsis lines: at most 30%
     lines = text.split("\n")
     if lines:
-        ellipsis_count = sum(1 for line in lines if line.rstrip().endswith("..."))
+        ellipsis_count = sum(1 for line in lines if line.rstrip().endswith("...") or line.rstrip().endswith("\u2026"))
         if ellipsis_count / len(lines) > 0.3:
             return False
 
