@@ -82,5 +82,4 @@ class AdamW(torch.optim.Optimizer):
                 state["m"] = m_t
                 state["v"] = v_t
                 state["t"] = t + 1
-
         return loss
