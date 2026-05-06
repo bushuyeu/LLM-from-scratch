@@ -1,5 +1,9 @@
 # ECE405 Assignment 2 — Written Responses
 
+**Repo:** 
+[github.com/bushuyeu/LLM-from-scratch](https://github.com/bushuyeu/LLM-from-scratch);
+[`ece405_assignment2`](https://github.com/bushuyeu/LLM-from-scratch/tree/main/ece405_assignment2)
+
 ## Section 2: Filtering Common Crawl
 
 ### 2.1 Looking at the data (look_at_cc)
