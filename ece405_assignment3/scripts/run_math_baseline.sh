@@ -1,0 +1,67 @@
+#!/bin/bash
+#SBATCH --job-name=math-baseline
+#SBATCH --partition=kill-shared
+#SBATCH --time=01:00:00
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=64G
+#SBATCH --gres=gpu:1
+
+# Zero-shot MATH evaluation on Qwen2.5-Math-1.5B (problem: math_baseline).
+# Submit with:
+#   koa submit scripts/run_math_baseline.sh
+# Override knobs via --env, e.g.:
+#   koa submit scripts/run_math_baseline.sh --env LIMIT=64
+
+set -euo pipefail
+
+RESULTS_ROOT="${KOA_ML_RESULTS_ROOT:-$HOME/koa-results}"
+JOB_DIR="${KOA_RUN_DIR:-${RESULTS_ROOT}/${SLURM_JOB_ID}}"
+REPO_DIR="${JOB_DIR}/repo"
+RESULTS_DIR="${JOB_DIR}/results"
+mkdir -p "${REPO_DIR}" "${RESULTS_DIR}"
+export RESULTS_DIR REPO_DIR
+
+if [[ -d "${REPO_DIR}" ]]; then
+  cd "${REPO_DIR}"
+fi
+
+echo "Writing outputs to ${RESULTS_DIR}"
+
+echo "==== Job Info ====="
+echo "Job ID: ${SLURM_JOB_ID:-unknown}"
+echo "Node: $(hostname)"
+echo "Started: $(date)"
+echo
+
+echo "==== GPU Info ====="
+if command -v nvidia-smi >/dev/null 2>&1; then
+  nvidia-smi
+else
+  echo "nvidia-smi not available"
+fi
+
+if [[ "${CUDA_VISIBLE_DEVICES:-}" =~ MIG- ]]; then
+  echo "Detected CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES} (MIG slice)."
+  echo "vLLM cannot run on MIG slices; exiting so the job can be resubmitted."
+  exit 2
+fi
+
+source "scripts/setup_env.sh"
+
+MODEL="${MODEL:-Qwen/Qwen2.5-Math-1.5B}"
+DATA_PATH="${DATA_PATH:-data/math/validation.jsonl}"
+OUTPUT_DIR="${RESULTS_DIR}/math_baseline"
+LIMIT="${LIMIT:-}"
+
+EXTRA_ARGS=()
+if [[ -n "${LIMIT}" ]]; then
+  EXTRA_ARGS+=(--limit "${LIMIT}")
+fi
+
+mkdir -p "${OUTPUT_DIR}"
+
+srun uv run python -m cs336_alignment.math_baseline \
+  --model "${MODEL}" \
+  --data-path "${DATA_PATH}" \
+  --output-dir "${OUTPUT_DIR}" \
+  "${EXTRA_ARGS[@]}"
