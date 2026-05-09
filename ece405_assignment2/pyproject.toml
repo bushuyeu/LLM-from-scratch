@@ -7,11 +7,11 @@ requires-python = ">=3.11"
 dependencies = [
     "numpy<2.0",
     "cs336-basics",
-    "torch~=2.7.0; sys_platform != 'darwin' or platform_machine != 'x86_64'",
-    "torch~=2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'", # Intel Macs
+    "torch~=2.11.0; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    "torch~=2.11.0; sys_platform == 'darwin' and platform_machine == 'x86_64'", # Intel Macs
     "tqdm>=4.67.1",
     "wandb>=0.19.7",
-    "pytest>=8.3.5",
+    "pytest>=9.0.3",
     "xopen>=2.0.2",
     "resiliparse>=0.15.2",
     "fasttext-wheel>=0.9.2",
