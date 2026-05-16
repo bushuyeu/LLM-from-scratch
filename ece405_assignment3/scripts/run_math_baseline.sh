@@ -15,15 +15,22 @@
 set -euo pipefail
 
 RESULTS_ROOT="${KOA_ML_RESULTS_ROOT:-$HOME/koa-results}"
-JOB_DIR="${KOA_RUN_DIR:-${RESULTS_ROOT}/${SLURM_JOB_ID}}"
-REPO_DIR="${JOB_DIR}/repo"
-RESULTS_DIR="${JOB_DIR}/results"
-mkdir -p "${REPO_DIR}" "${RESULTS_DIR}"
-export RESULTS_DIR REPO_DIR
 
-if [[ -d "${REPO_DIR}" ]]; then
+if [[ -n "${KOA_RUN_DIR:-}" ]]; then
+  # Launched via koa submit — repo snapshot is in KOA_RUN_DIR/repo
+  JOB_DIR="${KOA_RUN_DIR}"
+  REPO_DIR="${JOB_DIR}/repo"
+  RESULTS_DIR="${JOB_DIR}/results"
+  mkdir -p "${REPO_DIR}" "${RESULTS_DIR}"
   cd "${REPO_DIR}"
+else
+  # Direct sbatch — run from --chdir working directory
+  JOB_DIR="${RESULTS_ROOT}/${SLURM_JOB_ID}"
+  REPO_DIR="$(pwd)"
+  RESULTS_DIR="${JOB_DIR}/results"
+  mkdir -p "${RESULTS_DIR}"
 fi
+export RESULTS_DIR REPO_DIR
 
 echo "Writing outputs to ${RESULTS_DIR}"
 
