@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=math-baseline
-#SBATCH --partition=kill-shared
+#SBATCH --partition=ece405
 #SBATCH --time=01:00:00
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G

@@ -14,8 +14,8 @@ env_watch:
   - uv.lock
   - environment.yml
 
-# Add snapshot_excludes if you want to skip paths during submissions.
-# Basename-only patterns match anywhere; patterns with "/" match repo-relative paths.
-# Prefix with "./" or "/" to target only the repo root.
-# snapshot_excludes:
-#   - data/raw
+snapshot_excludes:
+  - tests/fixtures/Meta-Llama-3-8B
+  - tests/fixtures/tiny-gpt2
+  - tests/fixtures/tiny-gpt2-ref
+  - notebooks
