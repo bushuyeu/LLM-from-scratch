@@ -50,6 +50,22 @@ source "scripts/setup_env.sh"
 
 MODEL="${MODEL:-Qwen/Qwen2.5-Math-1.5B}"
 DATA_PATH="${DATA_PATH:-data/math/validation.jsonl}"
+
+# Download MATH dataset if not already present.
+if [[ ! -f "${DATA_PATH}" ]]; then
+  echo "==== Downloading MATH dataset ===="
+  uv run python -c "
+from pathlib import Path
+from datasets import load_dataset
+math_dir = Path('${DATA_PATH}').parent
+math_dir.mkdir(parents=True, exist_ok=True)
+ds = load_dataset('qwedsacf/competition_math')
+full = ds['train'].shuffle(seed=42)
+full.select(range(7500)).to_json(math_dir / 'train.jsonl')
+full.select(range(7500, len(full))).to_json(math_dir / 'validation.jsonl')
+print(f'Downloaded {len(full)} examples')
+"
+fi
 OUTPUT_DIR="${RESULTS_DIR}/math_baseline"
 LIMIT="${LIMIT:-}"
 
