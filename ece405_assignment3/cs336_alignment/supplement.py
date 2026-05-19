@@ -77,9 +77,15 @@ def compute_dpo_loss(
         token_lp = log_probs.gather(-1, targets.unsqueeze(-1)).squeeze(-1)  # (1, T-1)
         return token_lp[0, len(prompt_ids) - 1 :].sum()
 
-    prompt_ids = tokenizer.encode(prompt, add_special_tokens=False)
-    full_chosen = tokenizer.encode(prompt + response_chosen, add_special_tokens=False)
-    full_rejected = tokenizer.encode(prompt + response_rejected, add_special_tokens=False)
+    lm.eval()
+    lm_ref.eval()
+
+    prompt_ids = tokenizer.encode(prompt)
+    response_chosen_ids = tokenizer.encode(response_chosen)
+    response_rejected_ids = tokenizer.encode(response_rejected)
+
+    full_chosen = prompt_ids + response_chosen_ids
+    full_rejected = prompt_ids + response_rejected_ids
 
     log_ratio_chosen = _response_log_prob(lm, prompt_ids, full_chosen) - _response_log_prob(lm_ref, prompt_ids, full_chosen)
     log_ratio_rejected = _response_log_prob(lm, prompt_ids, full_rejected) - _response_log_prob(lm_ref, prompt_ids, full_rejected)

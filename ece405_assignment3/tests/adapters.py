@@ -178,8 +178,7 @@ def run_iterate_batches(
     shuffle: bool,
 ):
     from torch.utils.data import DataLoader
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
-    yield from loader
+    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
 
 def run_parse_mmlu_response(
