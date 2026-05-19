@@ -25,7 +25,7 @@ def masked_mean(
         Masked mean with matching semantics to tensor.mean(dim).
     """
     masked_sum = (tensor * mask).sum(dim=dim)
-    count = mask.float().sum(dim=dim).clamp(min=1)
+    count = mask.float().sum(dim=dim)
     return masked_sum / count
 
 
