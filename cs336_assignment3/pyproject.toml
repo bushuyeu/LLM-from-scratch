@@ -5,8 +5,8 @@ description = "CS 336 Assignment 3: Scaling Laws"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "requests>=2.32.3",
-    "torch>=2.7.0",
+    "requests>=2.33.0",
+    "torch>=2.12.0",
 ]
 
 [tool.uv]
