@@ -2,7 +2,7 @@ project: ece405_assignment3
 
 default_backend: koa
 
-cuda_minor_version: 12.9
+cuda_minor_version: 12.8
 
 env_watch:
   - scripts/setup_env.sh

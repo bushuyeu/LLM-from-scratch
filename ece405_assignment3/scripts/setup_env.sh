@@ -43,7 +43,7 @@ fi
 KOA_PROJECT_ROOT="${KOA_PROJECT_ROOT:-${PROJECT_ROOT}}"
 
 # Install local CUDA Toolkit (configurable via CUDA_MINOR_VERSION).
-CUDA_MINOR_VERSION="${CUDA_MINOR_VERSION:-12.9}"
+CUDA_MINOR_VERSION="${CUDA_MINOR_VERSION:-12.8}"
 
 case "${CUDA_MINOR_VERSION}" in
   12.4)
@@ -129,7 +129,7 @@ if [[ "${recreate}" -eq 1 ]]; then
 
   # (Re)create the uv-managed environment and install dependencies from this repo snapshot
   uv venv --clear "${SHARED_ENV_DIR}"
-  uv sync --extra hpc
+  uv sync
 
   if [[ -n "${ENV_HASH_SOURCE}" ]]; then
     mkdir -p "${ENV_CACHE_DIR}"

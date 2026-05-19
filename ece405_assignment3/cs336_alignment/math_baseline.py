@@ -6,10 +6,10 @@ section 3 / ECE405 assignment 3 section 3.2:
   1. load MATH validation examples from a JSONL file
   2. format them with the r1_zero prompt template
   3. generate with a vLLM model
-  4. score with `r1_zero_reward_fn` (Dr. GRPO grader)
+  4. score with `r1_zero_reward_fn`
   5. write per-example results + a metrics summary to disk
 
-The `evaluate_vllm` function is the reusable core; later sections (EI, GRPO)
+The `evaluate_vllm` function is reusable; later sections (EI, GRPO)
 call it for validation passes.
 """
 
