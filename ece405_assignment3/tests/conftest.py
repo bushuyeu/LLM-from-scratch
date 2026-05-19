@@ -210,8 +210,7 @@ def output_strs():
 
 @pytest.fixture
 def model_id():
-    local = "/data/a5-alignment/models/Qwen2.5-Math-1.5B"
-    return local if Path(local).exists() else "Qwen/Qwen2.5-Math-1.5B"
+    return "Qwen/Qwen2.5-Math-1.5B"
 
 
 @pytest.fixture
