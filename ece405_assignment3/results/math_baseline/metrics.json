@@ -1,0 +1,21 @@
+{
+  "n_examples": 5000,
+  "accuracy": 0.0258,
+  "format_rate": 0.142,
+  "categories": {
+    "format_correct_answer_wrong": 581,
+    "format_wrong": 4290,
+    "format_correct_answer_correct": 129
+  },
+  "model": "Qwen/Qwen2.5-Math-1.5B",
+  "data_path": "/mnt/lustre/koa/scratch/pavelb/ece405_data/math/validation.jsonl",
+  "sampling": {
+    "temperature": 1.0,
+    "top_p": 1.0,
+    "max_tokens": 1024,
+    "min_tokens": 4,
+    "stop": [
+      "</answer>"
+    ]
+  }
+}
